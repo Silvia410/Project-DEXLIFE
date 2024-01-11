@@ -1,0 +1,1290 @@
+---
+title: "DEXLIFE project"
+author: "Silvia"
+date: "2024-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#DATA
+```{r}
+DEXLIFE_0 <- readxl::read_excel("dexlife finale.xlsx")
+head(DEXLIFE_0)
+```
+
+
+```{r}
+library(dplyr)
+code<- DEXLIFE$SubjectGroup%>%
+  as.factor()
+levels(code)<-c("CT", "LI")
+table(code)
+```
+
+
+#Table 1
+```{r}
+tab <- c()
+
+
+for (i in c(2, 6, 8, 11:25, 28:33, 36:40, 68 , 73, 74, 76)){
+  p1 <- wilcox.test(dex_PRE_0[[i]][code=="CT"], 
+                    dex_POST_0[[i]][code=="CT"], exact = F)$p.value  #CT PRE VS POST
+  p2 <- wilcox.test(dex_PRE_0[[i]][code=="LI"], 
+                    dex_POST_0[[i]][code=="LI"], exact = F)$p.value # LI PRE VS POST
+  p3 <- wilcox.test(dex_PRE_0[[i]][code=="CT"], 
+                    dex_PRE_0[[i]][code=="LI"], exact = F)$p.value #CT VS LI PRE
+  p4 <- wilcox.test(dex_POST_0[[i]][code=="CT"], 
+                    dex_POST_0[[i]][code=="LI"], exact = F)$p.value # CT VS LI POST
+  p5 <- wilcox.test(Change_0[[i]][code=="CT"], 
+                    Change_0[[i]][code=="LI"], exact = F)$p.value # CT VS LI Change_0
+  
+  tab <- rbind(tab, c(sum(is.na(dex_PRE_0[[i]])==F),
+                      sum(is.na(dex_POST_0[[i]])==F),
+                      quantile(dex_PRE_0[[i]][code=="CT"], 
+                               probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                      quantile(dex_PRE_0[[i]][code=="LI"], 
+                               probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                      quantile(dex_POST_0[[i]][code=="CT"], 
+                               probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                      quantile(dex_POST_0[[i]][code=="LI"], 
+                               probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                      quantile(Change_0[[i]][code=="CT"], 
+                               probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                      quantile(Change_0[[i]][code=="LI"], 
+                               probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                      p1, p2, p3, p4, p5
+                      )
+               )
+  
+}
+
+colnames(tab)<-c("%na pre", "%na post",
+                 rep(levels(code), each= 3), rep(levels(code), each= 3), rep(levels(code), each= 3),
+                 "CT:pre vs post","LI:pre vs post", "PRE:ct vs li", "POST:ct vs li", "CHANGE:ct vs li"
+                 )
+rownames(tab)<- dimnames(dex_PRE_0)[[2]][c(2, 6,8, 11:25, 28:33, 36:40, 68 ,  73, 74, 76)]
+
+
+fdr_tab<- matrix(NA, dim(tab)[1], 5)
+fdr_tab[, 1]<-p.adjust(tab[, 21], method = "fdr")
+fdr_tab[, 2]<-p.adjust(tab[, 22], method = "fdr")
+fdr_tab[, 3]<-p.adjust(tab[, 23], method = "fdr")
+fdr_tab[, 4]<-p.adjust(tab[, 24], method = "fdr")
+fdr_tab[, 5]<-p.adjust(tab[, 25], method = "fdr")
+colnames(fdr_tab)<-c(
+                 "CT:pre vs post","LI:pre vs post", "PRE:ct vs li", "POST:ct vs li", "CHANGE:ct vs li"
+                 )
+rownames(fdr_tab)<-dimnames(dex_PRE_0)[[2]][c(2, 6,8, 11:25, 28:33, 36:40, 68 , 73, 74, 76)]
+
+```
+
+
+## Glucose Tolerance
+
+```{r}
+diabetes0<-dex_PRE_0$PRE_BG_0MIN
+diabetes0[dex_PRE_0$PRE_BG_0MIN<5.55]<-"1.Normal"
+diabetes0[dex_PRE_0$PRE_BG_0MIN>=5.55 & dex_PRE_0$PRE_BG_0MIN<7]<-"2.IFG"
+diabetes0[dex_PRE_0$PRE_BG_0MIN>=7]<-"3.Diabetes"
+
+diabetesOGTT<-dex_PRE_0$PRE_BG_120MIN
+diabetesOGTT[dex_PRE_0$PRE_BG_120MIN<7.77]<-"1.Normal"
+diabetesOGTT[dex_PRE_0$PRE_BG_120MIN>=7.77 & dex_PRE_0$PRE_BG_120MIN<11.1]<-"2.IGT"
+diabetesOGTT[dex_PRE_0$PRE_BG_120MIN>=11.1]<-"3.Diabetes"
+
+table(diabetes0, diabetesOGTT)
+glucose_tol0 <- interaction(diabetes0, diabetesOGTT)
+levels(glucose_tol0)<- c("NG", "i-IFG", "T2D", "i-IGT", "CGI", "T2D", "T2D", "T2D", "T2D")
+glucose_tol0 <- factor(glucose_tol0, levels = rev(c("NG", "i-IFG",  "i-IGT", "CGI", "T2D")))
+table(glucose_tol0)
+
+
+myTable <- table(code, glucose_tol0)
+myTable[1, ] <- myTable[1, ]/sum(myTable[1, ])
+myTable[2, ] <- myTable[2, ]/sum(myTable[2, ])
+
+myFrame <- as.data.frame(myTable)
+dimnames(myFrame)[[2]]<- c("Cluster", "Gluc Control", "Freq")
+
+library(RColorBrewer)
+tiff( filename = "glucose_control_pre_CT_LI.tiff", width = 9, height = 6, units = "cm", res = 600)
+ggplot(myFrame,  aes(x=Cluster, y = Freq, fill=`Gluc Control`)) + 
+  geom_bar(stat = "identity") + 
+  scale_fill_brewer(palette = "Reds", direction = -1) + 
+  theme_classic() + theme(text =element_text(size=10, colour = "black"), axis.text = element_text(size=8, colour = "black") , legend.key.size = unit(0.4, "cm" )  , legend.title = element_blank(), axis.title.x = element_blank())
+dev.off()
+myTable
+table(code, glucose_tol0)
+
+
+table(glucose_tol0, dex_PRE_0$SubjectGroup)
+```
+
+
+```{r}
+
+diabetes_post0<-dex_POST_0$POST_BG_0MIN
+diabetes_post0[dex_POST_0$POST_BG_0MIN<5.55]<-"1.Normal"
+diabetes_post0[dex_POST_0$POST_BG_0MIN >=5.55 & dex_POST_0$POST_BG_0MIN<7]<-"2.IFG"
+diabetes_post0[dex_POST_0$POST_BG_0MIN>=7]<-"3.Diabetes"
+table(diabetes_post0)
+
+
+diabetes_postOGTT<-dex_POST_0$POST_BG_120MIN
+diabetes_postOGTT[dex_POST_0$POST_BG_120MIN<7.77]<-"1.Normal"
+diabetes_postOGTT[dex_POST_0$POST_BG_120MIN >=7.77 & dex_POST_0$POST_BG_120MIN<11.1]<-"2.IGT"
+diabetes_postOGTT[dex_POST_0$POST_BG_120MIN>=11.1]<-"3.Diabetes"
+
+
+table(diabetes_post0, diabetes_postOGTT)
+glucose_tol_post <- interaction(diabetes_post0, diabetes_postOGTT)
+levels(glucose_tol_post)<- c("NG", "i-IFG", "T2D", "i-IGT", "CGI", "T2D", "T2D", "T2D", "T2D")
+glucose_tol_post <- factor(glucose_tol_post, levels = rev(c("NG", "i-IFG",  "i-IGT", "CGI", "T2D")))
+table(glucose_tol_post)
+
+
+myTable <- table(code, glucose_tol_post)
+myTable[1, ] <- myTable[1, ]/sum(myTable[1, ])
+myTable[2, ] <- myTable[2, ]/sum(myTable[2, ])
+
+myFrame <- as.data.frame(myTable)
+dimnames(myFrame)[[2]]<- c("Cluster", "Glucose Control", "Freq")
+
+library(RColorBrewer)
+tiff( filename = "glucose_control_pOST_CT_LI.tiff", width = 9, height = 6, units = "cm", res = 600)
+ggplot(myFrame,  aes(x=Cluster, y = Freq, fill=`Glucose Control`)) + 
+  geom_bar(stat = "identity") + 
+  scale_fill_brewer(palette = "Reds", direction = -1) + 
+  theme_classic() 
+dev.off()
+myTable
+table(code, glucose_tol_post)
+```
+
+
+```{r}
+df <- data.frame(codeIGT = glucose_tol0 == "CGI" |glucose_tol0 == "T2D" | glucose_tol0 == "i-IGT" ,
+                 QIGT = dex_PRE_0$`QIGT 120 pt scale PRE`)
+
+a <- glm(codeIGT ~ QIGT, data = df[is.na(df$QIGT)==F & is.na(df$codeIGT)==F, ],   
+         family = "binomial")
+summary(a)
+library(pROC)
+
+auc(roc(df$codeIGT[is.na(df$QIGT)==F & is.na(df$codeIGT)==F], a$fitted.values))
+
+```
+
+
+#Cluster Analysis
+
+```{r}
+soggetti_per_clusters <- is.na(DEXLIFE$`pre_new DI 0-120`)==F
+table(soggetti_per_clusters)
+```
+
+## Data imputation
+```{r}
+sum(is.na(DEXLIFE[soggetti_per_clusters, ]))/(350*153)
+```
+
+
+```{r}
+library(dplyr)
+library(tidyverse)
+dex<-t(impute::impute.knn(t(
+  DEXLIFE[soggetti_per_clusters, ]))$data)%>%
+  as.data.frame()
+```
+
+##CLUSTER
+```{r}
+clusters_o<-data.frame(AUC_insulin = dex_PRE$`Pre_AUC ins 120`, 
+                       ISI_matsuda = dex_PRE$`Pre Matsuda 120`,
+                       "iAUC I/G" = dex_PRE$`Pre_dAUC ins/glu 0-120`
+                     )
+                    
+clusters<-log(clusters_o)
+```
+
+```{r}
+library(factoextra)
+fviz_nbclust(scale(clusters), kmeans, method = "silhouette" , hc_method= "ward.D")
+```
+
+
+```{r}
+optimal<- 4
+set.seed(3) # for reproducibilit
+km<-kmeans(scale(clusters), centers = 4, nstart = 25)
+
+library(cluster)
+distance<- dist(clusters, method = 'euclidean')
+sil<-silhouette(km$cluster, distance)
+plot(sil)
+
+```
+
+
+```{r}
+label_cluster <- as.factor(km$cluster)
+levels(label_cluster)<-c("CL2","CL3","CL1", "CL4")
+label_cluster <- factor(label_cluster, levels = c("CL1","CL2","CL3","CL4"))
+table(label_cluster)
+```
+
+#### cluster performance
+
+```{r}
+jaccard <- function(a, b) {
+    intersection = length(intersect(a, b))
+    union = length(a) + length(b) - intersection
+    return (intersection/union)
+}
+
+n_repeat <- 100
+
+clusters_x_boot <- clusters
+label_cluster_x_boot <- label_cluster
+jaccard_estimate <- matrix(NA, n_repeat, 4)
+
+set.seed(1)
+rand<- runif(n_repeat)
+
+for(i in 1:n_repeat){
+  set.seed(round(rand[i]*100, digits = 0))
+  boot_order <- sample(rownames(clusters_x_boot), dim(clusters_x_boot)[1], replace = T)
+  boot_order_star <- intersect(boot_order, rownames(clusters_x_boot))
+  boot_set_star <- clusters_x_boot[boot_order_star, ]
+
+
+  set.seed(123)
+  boot_hcl<-kmeans(scale(boot_set_star), centers = optimal)
+
+  CL_1 <- intersect(boot_order_star[boot_hcl$cluster==1], boot_order_star)
+  CL_2 <- intersect(boot_order_star[boot_hcl$cluster==2], boot_order_star)
+  CL_3 <- intersect(boot_order_star[boot_hcl$cluster==3], boot_order_star)
+  CL_4 <- intersect(boot_order_star[boot_hcl$cluster==4], boot_order_star)
+  for (j in levels(label_cluster_x_boot)){
+    original_cluster <- intersect(rownames(clusters_x_boot)[label_cluster_x_boot==j], boot_order_star)
+    
+    n_jaccard <- c(jaccard(CL_1, original_cluster),
+                   jaccard(CL_2, original_cluster),
+                   jaccard(CL_3, original_cluster),
+                   jaccard(CL_4, original_cluster)
+                        )
+    jaccard_estimate[i,match(j, levels(label_cluster_x_boot))] <- max(n_jaccard)
+  }
+}
+
+mean(jaccard_estimate)
+```
+
+## BASELINE
+#### glucose tolerance in clusters
+
+```{r}
+diabetes0<-dex_PRE$PRE_BG_0MIN
+diabetes0[dex_PRE$PRE_BG_0MIN<5.55]<-"1.Normal"
+diabetes0[dex_PRE$PRE_BG_0MIN>=5.55 & dex_PRE$PRE_BG_0MIN<7]<-"2.IFG"
+diabetes0[dex_PRE$PRE_BG_0MIN>=7]<-"3.Diabetes"
+
+diabetesOGTT<-dex_PRE$PRE_BG_120MIN
+diabetesOGTT[dex_PRE$PRE_BG_120MIN<7.77]<-"1.Normal"
+diabetesOGTT[dex_PRE$PRE_BG_120MIN>=7.77 & dex_PRE$PRE_BG_120MIN<11.1]<-"2.IGT"
+diabetesOGTT[dex_PRE$PRE_BG_120MIN>=11.1]<-"3.Diabetes"
+
+table(diabetes0, diabetesOGTT)
+glucose_tol0 <- interaction(diabetes0, diabetesOGTT)
+levels(glucose_tol0)<- c("NG", "i-IFG", "T2D", "i-IGT", "CGI", "T2D", "T2D", "T2D", "T2D")
+glucose_tol0 <- factor(glucose_tol0, levels = rev(c("NG", "i-IFG",  "i-IGT", "CGI", "T2D")))
+table(glucose_tol0)
+
+
+myTable <- table(label_cluster, glucose_tol0)
+myTable[1, ] <- myTable[1, ]/sum(myTable[1, ])
+myTable[2, ] <- myTable[2, ]/sum(myTable[2, ])
+myTable[3, ] <- myTable[3, ]/sum(myTable[3, ])
+myTable[4, ] <- myTable[4, ]/sum(myTable[4, ])
+myFrame <- as.data.frame(myTable)
+dimnames(myFrame)[[2]]<- c("Cluster", "Gluc Control", "Freq")
+
+library(RColorBrewer)
+tiff( filename = "glucose_control_pre.tiff", width = 9, height = 6, units = "cm", res = 600)
+ggplot(myFrame,  aes(x=Cluster, y = Freq, fill=`Gluc Control`)) + 
+  geom_bar(stat = "identity") + 
+  scale_fill_brewer(palette = "Reds", direction = -1) + 
+  theme_classic() + theme(text =element_text(size=10, colour = "black"), axis.text = element_text(size=8, colour = "black") , legend.key.size = unit(0.4, "cm" )  , legend.title = element_blank(), axis.title.x = element_blank())
+dev.off()
+myTable
+table(label_cluster, glucose_tol0)
+
+```
+
+
+#### Pairwise comparison cluster before interventiom
+```{r}
+table_PRE<-c()
+for(i in 1:dim(dex_PRE)[2]){
+  pval12<- wilcox.test(dex_PRE[[i]][label_cluster==levels(label_cluster)[1]|label_cluster==levels(label_cluster)[2]]~
+                          label_cluster[label_cluster==levels(label_cluster)[1]|label_cluster==levels(label_cluster)[2]], exact = F)$p.value
+  
+  pval13<- wilcox.test(dex_PRE[[i]][label_cluster==levels(label_cluster)[1]|label_cluster==levels(label_cluster)[3]]~
+                          label_cluster[label_cluster==levels(label_cluster)[1]|label_cluster==levels(label_cluster)[3]], exact = F)$p.value
+  
+  pval14<- wilcox.test(dex_PRE[[i]][label_cluster==levels(label_cluster)[1]|label_cluster==levels(label_cluster)[4]]~
+                          label_cluster[label_cluster==levels(label_cluster)[1]|label_cluster==levels(label_cluster)[4]], exact = F)$p.value
+  
+  pval23<- wilcox.test(dex_PRE[[i]][label_cluster==levels(label_cluster)[3]|label_cluster==levels(label_cluster)[2]]~
+                          label_cluster[label_cluster==levels(label_cluster)[3]|label_cluster==levels(label_cluster)[2]], exact = F)$p.value
+    
+  pval24<- wilcox.test(dex_PRE[[i]][label_cluster==levels(label_cluster)[4]|label_cluster==levels(label_cluster)[2]]~
+                          label_cluster[label_cluster==levels(label_cluster)[4]|label_cluster==levels(label_cluster)[2]], exact = F)$p.value
+  
+  pval34<- wilcox.test(dex_PRE[[i]][label_cluster==levels(label_cluster)[3]|label_cluster==levels(label_cluster)[4]]~
+                          label_cluster[label_cluster==levels(label_cluster)[3]|label_cluster==levels(label_cluster)[4]], exact = F)$p.value
+  
+  
+  
+  table_PRE<-rbind(table_PRE, c( 
+                        quantile(dex_PRE[[i]][label_cluster==levels(label_cluster)[1]], probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                        quantile(dex_PRE[[i]][label_cluster==levels(label_cluster)[2]], probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                        quantile(dex_PRE[[i]][label_cluster==levels(label_cluster)[3]], probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                        quantile(dex_PRE[[i]][label_cluster==levels(label_cluster)[4]], probs = c(0.5, 0.25,0.75), digits = 2, na.rm = T),
+                        pval12, pval13, pval14, pval23, pval24, pval34 
+                        )
+               )
+}
+colnames(table_PRE)<-c(rep(levels(label_cluster), each= 3 ), "pval12"#1vs 4
+                   , "pval13", "pval14" #1 vs 2
+                   , "pval23", "pval24", "pval34" )
+rownames(table_PRE)<-dimnames(dex_PRE)[[2]]
+
+#library(xlsx)
+####write.xlsx(table_PRE, file="Dexlife_26april22.xlsx", sheetName = "differences PRE", append = T)
+View(table_PRE)
+
+fdr_table_PRE<- matrix(NA, dim(table_PRE)[1], 6)
+fdr_table_PRE[, 1]<-p.adjust(table_PRE[, 13], method = "fdr")
+fdr_table_PRE[, 2]<-p.adjust(table_PRE[, 14], method = "fdr")
+fdr_table_PRE[, 3]<-p.adjust(table_PRE[, 15], method = "fdr")
+fdr_table_PRE[, 4]<-p.adjust(table_PRE[, 16], method = "fdr")
+fdr_table_PRE[, 5]<-p.adjust(table_PRE[, 17], method = "fdr")
+fdr_table_PRE[, 6]<-p.adjust(table_PRE[, 18], method = "fdr")
+
+```
+
+
+#### Figure 1 (PRE)
+
+```{r}
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(median = median(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("median" = varname))
+ return(data_sum)
+}
+```
+
+```{r}
+cv<-clusters_o
+cv$AUC_insulin<-cv$AUC_insulin/1000
+cv$iAUC.I.G<-cv$iAUC.I.G/10
+cv<-cv[order(label_cluster), ]
+Variables =rep( c("AUC Ins(·10^3 pmol min/L)" , 
+                  "ISI"    , 
+                  "iAUC I/G"
+                  ), each=dim(cv)[1])
+Clusters=rep(levels(label_cluster),times=c(table(label_cluster) ) )
+Values=c(as.matrix(cv))
+data1=data.frame(Variables, Clusters ,  Values)
+data1$Variables<-factor(data1$Variables, levels =  c( "ISI",       
+                                                      "AUC Ins(·10^3 pmol min/L)" ,
+                                                      "iAUC I/G" )
+                        )
+
+library(ggplot2)
+
+p<-ggplot(data1, aes(x=Clusters, y=Values, fill=Clusters))  +  
+  geom_violin(draw_quantiles = 0.5)+  geom_point(color="black", size=0.8, alpha=0.43 )
+  
+tiff( filename = "barplot pre.tiff", width = 24 , height = 6 , res = 600, units = "cm")
+p+ theme_classic()+ theme(text =element_text(size=12, colour = "black"), axis.text = element_text(size=8, colour = "black")  ) +  facet_wrap(~ Variables, scales = "free", nrow = 1, strip.position = "left" )+ ylab(NULL)+ scale_y_continuous( trans = "sqrt") + 
+ theme(strip.background = element_rect(colour="black", fill="white", 
+                                       linetype = "blank"), panel.spacing.y = unit(1, "cm"),# panel.spacing.x  = unit(0.5, "cm"),
+       strip.placement = "outside"
+       )
+dev.off()
+```
+
+#### CURVES
+glucose
+```{r}
+cv<-dex_PRE[, c(12:17)]
+
+cv<-cv[order(label_cluster), ]
+Variables =rep(c("0","30","60","90",
+                 "120","180"), 
+               each=dim(cv)[1])
+Clusters=rep(levels(label_cluster)
+            ,times=c(table(label_cluster))
+)
+
+
+Values=c(as.matrix(cv))
+data1=data.frame(Values, Clusters, Variables)
+data1$Variables<-factor(data1$Variables, levels = c("0","30","60","90",
+                 "120","180"))
+
+df2 <- data_summary(data1, varname="Values", 
+                    groupnames=c("Clusters","Variables"))
+# Convert dose to a factor variable
+df2$Variables=as.factor(df2$Variables)
+df2$N<-c(rep(table(label_cluster)[1], 6),rep(table(label_cluster)[2], 6),rep(table(label_cluster)[3], 6),rep(table(label_cluster)[4], 6)) 
+head(df2)
+
+# Default line plot
+p_Gpost<- ggplot(df2, aes(x=Variables, y=Values, group=Clusters, color=Clusters)) + 
+  geom_line(size= 1.2)+
+  geom_point()+
+  geom_errorbar(aes(ymin=Values-sd/sqrt(N), ymax=Values+sd/sqrt(N)), width=.4, size = 1.2, 
+                 position=position_dodge(0.05))+ 
+  labs( x="Time", y = "Glucose (mmol/L)")+
+  theme_classic() + 
+  theme(text = element_text(size = 10), axis.text = element_text(size = 8, colour = "black") # plot.title = element_text(hjust = 0.5, size = 14)
+        ) + 
+  ylim(4,12)+ 
+  scale_x_discrete(limits = factor(c(0, 30, 60, 90, 120, 150, 180)))
+
+tiff( filename = "curva glucose pre.tiff", width = 9 , height = 6, res = 600, units = "cm")
+p_Gpost     
+dev.off()  
+```
+insulin
+```{r}
+cv<-dex_PRE[, c(18:23)]
+
+cv<-cv[order(label_cluster), ]
+Variables =rep(c("0","30","60","90",
+                 "120","180"), 
+               each=dim(cv)[1])
+Clusters=rep(levels(label_cluster),
+             times=c(table(label_cluster))
+)
+
+
+Values=c(as.matrix(cv))
+data1=data.frame(Values, Clusters, Variables)
+data1$Variables<-factor(data1$Variables, levels = c("0","30","60","90",
+                 "120","180"))
+
+df2 <- data_summary(data1, varname="Values", 
+                    groupnames=c("Clusters","Variables"))
+# Convert dose to a factor variable
+df2$Variables=as.factor(df2$Variables)
+df2$N<-c(rep(table(label_cluster)[1], 6),rep(table(label_cluster)[2], 6),rep(table(label_cluster)[3], 6),rep(table(label_cluster)[4], 6)) 
+head(df2)
+
+# Default line plot
+p_Ipost<- ggplot(df2, aes(x=Variables, y=Values, group=Clusters, color=Clusters)) + 
+  geom_line(size= 1.2)+
+  geom_point()+
+  geom_errorbar(aes(ymin=Values-sd/sqrt(N), ymax=Values+sd/sqrt(N)), width=.4, size = 1.2, 
+                 position=position_dodge(0.05))+ 
+  labs( x="Time", y = "Insulin (pmol/L)")+
+  theme_classic() + 
+   theme(text = element_text(size = 10), axis.text = element_text(size = 8, colour = "black") # plot.title = element_text(hjust = 0.5, size = 14)
+        ) + 
+  ylim(0, 1800)+ 
+  scale_x_discrete(limits = factor(c(0, 30, 60, 90, 120, 150, 180)))
+
+tiff( filename = "curva Ins pre.tiff", width = 9 , height = 6, res = 600, units = "cm")
+p_Ipost     
+dev.off()  
+```
+
+#### METABOLOMICS
+```{r}
+selection_mets<-c(43:66, 68)
+selection_mets<-selection_mets[c(1:11,14,17:18,22,12:13, 15:16,19:21, 23:24, 25) ]
+
+cer<-table_PRE[selection_mets,c(1, 4, 7, 10)]
+
+for (r in 1:length(rownames(cer))){
+  rownames(cer)[r]<-substring(rownames(cer)[r], 1 , nchar(rownames(cer)[r])-4) 
+}
+
+library(gplots)
+col <-c(rev(hsv(seq(0.18,0.35, length.out = 15), 0.8, rev(seq(0.75,1, length.out = 15)))), rev(hsv(seq(0.05,0.18, length.out = 15), 0.8 , 1)))
+lhei <- c(0.8,4)
+lwid <- c(1.5,4)
+pval <- fdr_table_PRE[selection_mets, 1:3]
+
+
+pval_matrixN<-matrix(NA,dim(cer)[1], 4 )
+pval_matrixN[,2][pval[, 1]<0.05] <-"#" #1 vs 2 che con cluster originali è 1 vs 4
+pval_matrixN[,3][pval[, 2]<0.05 ] <-"#" #1 vs 3
+pval_matrixN[,4][pval[, 3]<0.05] <-"#" #1 vs 4
+
+
+tiff("heatmap_mets_PRE2.tiff",  width = 20 , height = 20 , res = 600, units = "cm")
+heatmap.2(cer, Colv = NA, Rowv = NA, dendrogram = "none",
+          scale = "row",  trace = "none", cexRow = 1, cexCol = 1.5, key = T, cellnote = pval_matrixN, key.title = "", keysize = 0.7,
+          notecex = 1.5,
+          notecol = "black", lhei = lhei, lwid = lwid,  margins = c(5,20),
+          col= col)
+dev.off()
+```
+
+## CHANGES ON LI
+
+```{r}
+codeCL <- code[soggetti_per_clusters]
+
+dex_PRE2<-dex_PRE[codeCL == "LI", ]
+dex_POST2<-dex_POST[codeCL == "LI", ]
+Change2<- Change[ codeCL == "LI", ]
+Delta2 <- dex_POST2 - dex_PRE2
+label_cluster2 <- label_cluster[codeCL == "LI"]
+
+```
+
+#### PRE vs POST
+
+ALL
+```{r}
+pval_tab<-c()
+for( i in 1:dim(dex_POST2)[2]){
+pval_tab<-rbind(pval_tab, c(dimnames(dex_PRE2)[[2]][i],
+                            dimnames(dex_POST2)[[2]][i],
+                            wilcox.test(dex_POST2[[i]][label_cluster2 == levels(label_cluster2)[1]], dex_PRE2[[i]][label_cluster2 == levels(label_cluster2)[1]], paired = T, exact = F)$p.value,
+                            wilcox.test(dex_POST2[[i]][label_cluster2 == levels(label_cluster2)[2]],dex_PRE2[[i]][label_cluster2 == levels(label_cluster2)[2]], paired = T, exact = F)$p.value,
+                            wilcox.test(dex_POST2[[i]][label_cluster2 == levels(label_cluster2)[3]],dex_PRE2[[i]][label_cluster2 == levels(label_cluster2)[3]], paired = T, exact = F)$p.value,
+                            wilcox.test(dex_POST2[[i]][label_cluster2 == levels(label_cluster2)[4]],dex_PRE2[[i]][label_cluster2 == levels(label_cluster2)[4]], paired = T, exact = F)$p.value)
+)
+}
+dim(pval_tab)
+colnames(pval_tab)<-c("names", "names", "CL1", "CL2", "CL3", "CL4")
+```
+
+```{r}
+per_heatmap<-c()
+for(i in 1:dim(Change)[2]){
+  per_heatmap<-rbind(per_heatmap, c(
+                        median(Change2[[i]][label_cluster2==levels(label_cluster2)[1]], na.rm = T),
+                        median(Change2[[i]][label_cluster2==levels(label_cluster2)[2]], na.rm = T),
+                        median(Change2[[i]][label_cluster2==levels(label_cluster2)[3]], na.rm = T),
+                        median(Change2[[i]][label_cluster2==levels(label_cluster2)[4]], na.rm = T)
+                        )
+               )
+}
+colnames(per_heatmap)<- levels(label_cluster2)
+rownames(per_heatmap)<- dimnames(Change2)[[2]]
+
+##gli asterischi sono per i cambiamenti rispetto a PRE
+pval_matrix<-matrix(1,dim(per_heatmap)[1], 4 )
+
+pval_matrix[, 1]<- p.adjust(pval_tab[, 3], method = "fdr") 
+pval_matrix[, 2]<- p.adjust(pval_tab[, 4], method = "fdr") 
+pval_matrix[, 3]<- p.adjust(pval_tab[, 5], method = "fdr") 
+pval_matrix[, 4]<- p.adjust(pval_tab[, 6], method = "fdr") 
+
+pval_matrixN<-matrix(NA,dim(per_heatmap)[1], 4 )
+pval_matrixN[,1][pval_matrix[, 1]<0.05] <-"*" #1 vs 2 che con cluster originali è 1 vs 4
+pval_matrixN[,2][pval_matrix[, 2]<0.05] <-"*" #1 vs 2 che con cluster originali è 1 vs 4
+pval_matrixN[,3][pval_matrix[, 3]<0.05 ] <-"*" #1 vs 3
+pval_matrixN[,4][pval_matrix[, 4]<0.05] <-"*" #1 vs 4
+
+```
+
+
+#### Change between clusters
+
+```{r}
+table_FC<-c()
+table_delta<-c()
+for(i in 1:dim(dex_PRE)[2]){
+  pval12<- wilcox.test(Change2[[i]][label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[2]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[2]])$p.value
+  
+  pval13<- wilcox.test(Change2[[i]][label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[3]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[3]])$p.value
+  
+  pval14<- wilcox.test(Change2[[i]][label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[4]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[4]])$p.value
+  
+  pval23<- wilcox.test(Change2[[i]][label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[2]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[2]])$p.value
+  
+  pval24<- wilcox.test(Change2[[i]][label_cluster2==levels(label_cluster2)[4]|label_cluster2==levels(label_cluster2)[2]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[4]|label_cluster2==levels(label_cluster2)[2]])$p.value
+  
+  pval34<- wilcox.test(Change2[[i]][label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[4]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[4]])$p.value
+  
+  
+  
+  table_FC<-rbind(table_FC, c(
+                        quantile(Change2[[i]][label_cluster2==levels(label_cluster2)[1]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        quantile(Change2[[i]][label_cluster2==levels(label_cluster2)[2]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        quantile(Change2[[i]][label_cluster2==levels(label_cluster2)[3]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        quantile(Change2[[i]][label_cluster2==levels(label_cluster2)[4]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        pval12, pval13, pval14, pval23, pval24, pval34
+                        )
+               )
+  
+  
+  pval12<- wilcox.test(Delta2[[i]][label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[2]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[2]])$p.value
+  
+  pval13<- wilcox.test(Delta2[[i]][label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[3]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[3]])$p.value
+  
+  pval14<- wilcox.test(Delta2[[i]][label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[4]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[1]|label_cluster2==levels(label_cluster2)[4]])$p.value
+  
+  pval23<- wilcox.test(Delta2[[i]][label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[2]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[2]])$p.value
+  
+  pval24<- wilcox.test(Delta2[[i]][label_cluster2==levels(label_cluster2)[4]|label_cluster2==levels(label_cluster2)[2]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[4]|label_cluster2==levels(label_cluster2)[2]])$p.value
+  
+  pval34<- wilcox.test(Delta2[[i]][label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[4]]~
+                          label_cluster2[label_cluster2==levels(label_cluster2)[3]|label_cluster2==levels(label_cluster2)[4]])$p.value
+  
+
+  
+   table_delta<-rbind(table_delta, c(
+                        quantile(Delta2[[i]][label_cluster2==levels(label_cluster2)[1]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        quantile(Delta2[[i]][label_cluster2==levels(label_cluster2)[2]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        quantile(Delta2[[i]][label_cluster2==levels(label_cluster2)[3]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        quantile(Delta2[[i]][label_cluster2==levels(label_cluster2)[4]], probs = c(0.5, .25, .75 ), digits = 2, na.rm = T), 
+                        pval12, pval13, pval14, pval23, pval24, pval34
+                        )
+               )
+}
+rownames(table_FC)<-dimnames(Change2)[[2]]
+colnames(table_FC)<-c(rep(levels(label_cluster2), each= 3 ), "pval12", "pval13", "pval14", "pval23", "pval24", "pval34" )
+rownames(table_delta)<-dimnames(Change2)[[2]]
+colnames(table_delta)<-c(rep(levels(label_cluster2), each= 3 ), "pval12", "pval13", "pval14", "pval23", "pval24", "pval34" )
+
+fdr_table_delta <- matrix(NA, dim(Delta2)[2], 6)
+fdr_table_delta[,1]<- p.adjust(table_delta[,13], method = "fdr")
+
+fdr_table_delta[,2]<- p.adjust(table_delta[,14], method = "fdr")
+
+fdr_table_delta[,3]<- p.adjust(table_delta[,15], method = "fdr")
+
+fdr_table_delta[,4]<- p.adjust(table_delta[,16], method = "fdr")
+
+fdr_table_delta[,5]<- p.adjust(table_delta[,17], method = "fdr")
+
+fdr_table_delta[,6]<- p.adjust(table_delta[,18], method = "fdr")
+
+```
+
+####figure disp index
+```{r}
+df <- data.frame("iAUC I/G"= dex_PRE2$`Pre_dAUC ins/glu 0-120` , ISI = dex_PRE2$`Pre Matsuda 120` , cluster = label_cluster2)
+ggplot(df, aes(x = ISI, y = "iAUC I/G", color = cluster)) + geom_point()
+
+df1 <- data.frame("iAUC I/G"= dex_POST2$`Post_dAUC ins/glu 0-120` , ISI = dex_POST2$`PostMatsuda 120`, cluster = label_cluster2)
+
+
+
+df2 <- data.frame("iAUC I/G" = c(mean(df$iAUC.I.G[df$cluster==levels(df$cluster)[1]]),
+                          mean(df$iAUC.I.G[df$cluster==levels(df$cluster)[2]]),
+                          mean(df$iAUC.I.G[df$cluster==levels(df$cluster)[3]]),
+                          mean(df$iAUC.I.G[df$cluster==levels(df$cluster)[4]]),
+                          
+                          mean(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[1]], na.rm = T),
+                          mean(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[2]], na.rm = T),
+                          mean(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[3]], na.rm = T),
+                          mean(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[4]], na.rm = T)
+                          ), 
+                  ISI = c(mean(df$ISI[df$cluster==levels(df$cluster)[1]]),
+                          mean(df$ISI[df$cluster==levels(df$cluster)[2]]),
+                          mean(df$ISI[df$cluster==levels(df$cluster)[3]]),
+                          mean(df$ISI[df$cluster==levels(df$cluster)[4]]),
+                          mean(df1$ISI[df1$cluster==levels(df1$cluster)[1]], na.rm = T),
+                          mean(df1$ISI[df1$cluster==levels(df1$cluster)[2]], na.rm = T),
+                          mean(df1$ISI[df1$cluster==levels(df1$cluster)[3]], na.rm = T),
+                          mean(df1$ISI[df1$cluster==levels(df1$cluster)[4]], na.rm = T)
+                          ), 
+                  Cluster =  rep(levels(df$cluster),2)
+)
+
+df2$hypk <- df2$iAUC.I.G * df2$ISI
+
+df2$sd_IGI <- c(
+                          sd(df$iAUC.I.G[df$cluster==levels(df$cluster)[1]])/sqrt(table(df$cluster)[1]),
+                          sd(df$iAUC.I.G[df$cluster==levels(df$cluster)[2]])/sqrt(table(df$cluster)[2]),
+                          sd(df$iAUC.I.G[df$cluster==levels(df$cluster)[3]])/sqrt(table(df$cluster)[3]),
+                          sd(df$iAUC.I.G[df$cluster==levels(df$cluster)[4]])/sqrt(table(df$cluster)[4]),
+                          
+                          sd(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[1]], na.rm = T)/sqrt(table(df$cluster)[1]),
+                          sd(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[2]], na.rm = T)/sqrt(table(df$cluster)[2]),
+                          sd(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[3]], na.rm = T)/sqrt(table(df$cluster)[3]),
+                          sd(df1$iAUC.I.G[df1$cluster==levels(df1$cluster)[4]], na.rm = T)/sqrt(table(df$cluster)[4])
+                          )
+
+df2$sd_ISI <- c(
+                          sd(df$ISI[df$cluster==levels(df$cluster)[1]])/sqrt(table(df$cluster)[1]),
+                          sd(df$ISI[df$cluster==levels(df$cluster)[2]])/sqrt(table(df$cluster)[2]),
+                          sd(df$ISI[df$cluster==levels(df$cluster)[3]])/sqrt(table(df$cluster)[3]),
+                          sd(df$ISI[df$cluster==levels(df$cluster)[4]])/sqrt(table(df$cluster)[4]),
+                          sd(df1$ISI[df1$cluster==levels(df1$cluster)[1]], na.rm = T)/sqrt(table(df$cluster)[1]),
+                          sd(df1$ISI[df1$cluster==levels(df1$cluster)[2]], na.rm = T)/sqrt(table(df$cluster)[2]),
+                          sd(df1$ISI[df1$cluster==levels(df1$cluster)[3]], na.rm = T)/sqrt(table(df$cluster)[3]),
+                          sd(df1$ISI[df1$cluster==levels(df1$cluster)[4]], na.rm = T)/sqrt(table(df$cluster)[4])
+                          )
+hyp <- data.frame( xx = seq(1,5, 0.001))
+```
+
+
+```{r}
+tiff(filename = "DI_change_mean.tif", width = 9, height = 6, units = "cm", res = 300)
+ggplot(data = df2, aes(x = ISI, y = iAUC.I.G, col = Cluster)) + 
+  geom_point(data = hyp, aes(x = xx, y = df2$hypk[1]/xx), size=0.0001, col = "grey", ) +
+  geom_point(data = hyp, aes(x = xx, y = df2$hypk[2]/xx), size=0.0001, col = "grey") +
+  geom_point(data = hyp, aes(x = xx, y = df2$hypk[3]/xx), size=0.0001, col = "grey") +
+  geom_point(data = hyp, aes(x = xx, y = df2$hypk[4]/xx), size=0.0001, col = "grey") +
+  geom_point(data = hyp, aes(x = xx, y = df2$hypk[5]/xx), size=0.0001, col = "grey") +
+  geom_point(data = hyp, aes(x = xx, y = df2$hypk[8]/xx), size=0.0001, col = "grey") +
+  geom_point(data = df2, aes(x = ISI, y = iAUC.I.G, col = Cluster), size = 4) +
+  
+  geom_errorbar(data = df2, aes(xmin= ISI -sd_ISI, xmax= ISI +sd_ISI, ymin= iAUC.I.G -sd_IGI, ymax= iAUC.I.G + sd_IGI)) + 
+  geom_errorbar(data = df2, aes(xmin= ISI -sd_ISI, xmax= ISI +sd_ISI)) + 
+  ylab("iAUC I/G") + xlab("ISI") + ylim(c(100,900)) +# scale_color_manual(matched_color)+
+  theme(text =element_text(size=10, colour = "black"), axis.text = element_text(size=8, colour = "black") ) + 
+  theme_classic()
+
+dev.off()
+```
+
+
+
+#### Figure barplot Changes
+
+```{r}
+cv<-Change2[, c(24,25,29,76,73,74)]
+cv$`Post_Hep-IR`<- -cv$`Post_Hep-IR`
+cv<-cv[order(label_cluster2), ]
+Variables =rep( c("ISI(log2 FC)"    ,   
+                  "HOMA IR(log2 FC)"   ,       
+                  "AUC Ins(log2 FC)" , 
+                  "Hep IS(log2 FC)", 
+                  "iAUC I/G(log2 FC)", 
+                  "DI(log2 FC)"), 
+                each=dim(cv)[1])
+Clusters=rep(levels(label_cluster2),times=c(table(label_cluster2) ) )
+Values=c(as.matrix(cv))
+data1=data.frame(Variables, Clusters ,  Values)
+data1$Variables<-factor(data1$Variables, levels =  c(  "HOMA IR(log2 FC)"   , 
+                                                       "ISI(log2 FC)"    ,       
+                                                       "AUC Ins(log2 FC)" ,
+                                                       "Hep IS(log2 FC)", 
+                                                       "iAUC I/G(log2 FC)", 
+                                                       "DI(log2 FC)"))
+
+library(ggplot2)
+tiff( filename = "barplot FC1.tiff", width = 9 , height = 6 , res = 600, units = "cm")
+p<-ggplot(data1[1:dim(Change2)[1],], aes(x=Clusters, y=Values, fill=Clusters))  +  
+    geom_violin(draw_quantiles = 0.5)+  geom_point(size=0.8, alpha=0.43, color="black") + geom_hline(yintercept = 0, color = "blue", linetype = "dashed")
+
+p+ theme_classic()+ ylab(levels(data1$Variables)[2])+
+  theme(text =element_text(size=10), axis.text = element_text(size=8, colour = "black"), 
+       axis.title.x = element_blank()  )
+
+dev.off()
+tiff( filename = "barplot FC2.tiff", width = 9 , height = 6 , res = 600, units = "cm")
+p<-ggplot(data1[(dim(Change2)[1]+1):(dim(Change2)[1]*2),], aes(x=Clusters, y=Values, fill=Clusters))  +  
+    geom_violin(draw_quantiles = 0.5)+  geom_point(color="black", size=0.8, alpha=0.43 ) + geom_hline(yintercept = 0, color = "blue", linetype = "dashed")
+
+
+p+ theme_classic()+ ylab(levels(data1$Variables)[1])+ 
+  theme(text =element_text(size=10), axis.text = element_text(size=8, colour = "black"), 
+       axis.title.x = element_blank()  )
+
+dev.off()
+tiff( filename = "barplot FC3.tiff", width = 9 , height = 6 , res = 600, units = "cm")
+p<-ggplot(data1[(dim(Change2)[1]*5+1):(dim(Change2)[1]*6),], aes(x=Clusters, y=Values, fill=Clusters))  +  
+    geom_violin(draw_quantiles = 0.5)+  geom_point(color="black", size=0.8, alpha=0.43 ) + geom_hline(yintercept = 0, color = "blue", linetype = "dashed")
+
+
+p+ theme_classic()+  ylab(levels(data1$Variables)[6])+
+  theme(text =element_text(size=10), axis.text = element_text(size=8, colour = "black"), 
+       axis.title.x = element_blank()  )
+
+dev.off()
+tiff( filename = "barplot FC4.tiff", width = 9 , height = 6 , res = 600, units = "cm")
+p<-ggplot(data1[(dim(Change2)[1]*2+1):(dim(Change2)[1]*3),], aes(x=Clusters, y=Values, fill=Clusters))  +  
+    geom_violin(draw_quantiles = 0.5)+  geom_point(color="black", size=0.8, alpha=0.43 ) + geom_hline(yintercept = 0, color = "blue", linetype = "dashed")
+
+
+p+ theme_classic()+  ylab(levels(data1$Variables)[3])+
+  theme(text =element_text(size=10), axis.text = element_text(size=8, colour = "black"), 
+       axis.title.x = element_blank()  )
+
+dev.off()
+tiff( filename = "barplot FC5.tiff", width = 9 , height = 6 , res = 600, units = "cm")
+p<-ggplot(data1[(dim(Change2)[1]*3+1):(dim(Change2)[1]*4),], aes(x=Clusters, y=Values, fill=Clusters))  +  
+    geom_violin(draw_quantiles = 0.5)+  geom_point(color="black", size=0.8, alpha=0.43 ) + geom_hline(yintercept = 0, color = "blue", linetype = "dashed")
+
+
+p+ theme_classic()+  ylab(levels(data1$Variables)[4])+
+  theme(text =element_text(size=10), axis.text = element_text(size=8, colour = "black"), 
+       axis.title.x = element_blank()  )
+
+dev.off()
+
+tiff( filename = "barplot FC6.tiff", width = 9 , height = 6 , res = 600, units = "cm")
+p<-ggplot(data1[(dim(Change2)[1]*4+1):(dim(Change2)[1]*5),], aes(x=Clusters, y=Values, fill=Clusters))  +  
+    geom_violin(draw_quantiles = 0.5)+  geom_point(color="black", size=0.8, alpha=0.43 ) + geom_hline(yintercept = 0, color = "blue", linetype = "dashed")
+
+
+p+ theme_classic()+  ylab(levels(data1$Variables)[5])+
+  theme(text =element_text(size=10), axis.text = element_text(size=8, colour = "black"), 
+       axis.title.x = element_blank()  )
+
+dev.off()
+```
+
+#### CURVES 
+
+```{r}
+cv<-Delta[codeCL=="LI", c(12:17)]
+cv<-cv[order(label_cluster[codeCL=="LI"]), ]
+
+Variables =rep(c("0","30","60","90",
+                 "120","180"
+                 ), each=dim(cv)[1])
+Clusters=rep(levels(label_cluster)
+            ,times=c(table(label_cluster[codeCL=="LI"]))
+)
+
+
+Values=c(as.matrix(cv))
+data1=data.frame(Values, Clusters, Variables)
+data1$Variables<-factor(data1$Variables, levels = c("0","30","60","90",
+                 "120","180"))
+
+df2 <- data_summary(data1, varname="Values", 
+                    groupnames=c("Clusters","Variables"))
+# Convert dose to a factor variable
+df2$Variables=as.factor(df2$Variables)
+df2$N<-c(rep(table(label_cluster[codeCL=="LI"])[1], 6),rep(table(label_cluster[codeCL=="LI"])[2], 6),rep(table(label_cluster[codeCL=="LI"])[3], 6),rep(table(label_cluster[codeCL=="LI"])[4], 6)) 
+head(df2)
+
+##curva controlli 
+cv<-Delta[codeCL=="CT", c(10:15)]
+Variables =rep(c("0","30","60","90",
+                 "120","180"
+                 ), each=dim(cv)[1])
+Clusters=rep("CT"
+            ,times=c(table(codeCL)[1]))
+
+
+Values=c(as.matrix(cv))
+data3=data.frame(Values, Clusters, Variables)
+data3$Variables<-factor(data3$Variables, levels = c("0","30","60","90",
+                 "120","180"))
+
+df4 <- data_summary(data3, varname="Values", 
+                    groupnames=c("Clusters","Variables"))
+# Convert dose to a factor variable
+df4$Variables=as.factor(df4$Variables)
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+# Default line plot
+p_Gpost<- ggplot(df2, aes(x=Variables, y=Values, group=Clusters, color=Clusters)) + 
+  geom_line(size= 1.2)+
+  geom_point()+
+  geom_errorbar(aes(ymin=Values-sd/sqrt(N), ymax=Values+sd/sqrt(N)), width=.4, size = 1.2, 
+                 position=position_dodge(0.05))+  
+  geom_point(data = df4, aes(x=Variables, y=Values), size= 0.5)+
+  geom_line(data = df4, aes(x=Variables, y=Values), size= 0.5, linetype = "dashed")+
+  ylab("Glucose(Delta mmol/L)")+ xlab("Time") + 
+  theme_classic() + 
+  theme(text = element_text(size = 10), axis.text = element_text(size = 8)) + 
+  ylim(-2,1.5)+ 
+  scale_x_discrete(limits = factor(c(0, 30, 60, 90, 120, 150, 180))) + 
+  scale_color_manual(values=c(gg_color_hue(4), "blue" ))
+tiff( filename = "curva glucose delta postLI2.tiff", width = 7 , height = 6, res = 600, units = "cm")
+
+p_Gpost     
+dev.off()  
+```
+
+
+INS
+
+```{r}
+cv<-Delta[codeCL=="LI", c(18:23)]
+
+#cv<-cv[-c(171, 83), ]
+cv<-cv[order(label_cluster[codeCL=="LI"]), ]
+Variables =rep(c("0","30","60","90",
+                 "120","180"
+                 ), each=dim(cv)[1])
+Clusters=rep(levels(label_cluster)
+            ,times=c(table(label_cluster[codeCL=="LI"]))
+)
+
+
+Values=c(as.matrix(cv))
+data1=data.frame(Values, Clusters, Variables)
+data1$Variables<-factor(data1$Variables, levels = c("0","30","60","90",
+                 "120","180"))
+
+df2 <- data_summary(data1, varname="Values", 
+                    groupnames=c("Clusters","Variables"))
+# Convert dose to a factor variable
+df2$Variables=as.factor(df2$Variables)
+df2$N<-c(rep(table(label_cluster[codeCL=="LI"])[1], 6),rep(table(label_cluster[codeCL=="LI"])[2], 6),rep(table(label_cluster[codeCL=="LI"])[3], 6),rep(table(label_cluster[codeCL=="LI"])[4], 6)) 
+head(df2)
+
+
+##curva controlli 
+cv<-Delta[codeCL=="CT", c(16:21)]
+Variables =rep(c("0","30","60","90",
+                 "120","180"
+                 ), each=dim(cv)[1])
+Clusters=rep("CT"
+            ,times=c(table(codeCL)[1]))
+
+
+Values=c(as.matrix(cv))
+data3=data.frame(Values, Clusters, Variables)
+data3$Variables<-factor(data3$Variables, levels = c("0","30","60","90",
+                 "120","180"))
+
+df4 <- data_summary(data3, varname="Values", 
+                    groupnames=c("Clusters","Variables"))
+# Convert dose to a factor variable
+df4$Variables=as.factor(df4$Variables)
+# Default line plot
+p_Ipost<- ggplot(df2, aes(x=Variables, y=Values, group=Clusters, color=Clusters)) + 
+  geom_line(size= 1.2)+
+  geom_point()+
+  geom_errorbar(aes(ymin=Values-sd/sqrt(N), ymax=Values+sd/sqrt(N)), width=.4, size = 1.2, 
+                 position=position_dodge(0.05))+ 
+  geom_point(data = df4, aes(x=Variables, y=Values), size= 0.5)+
+  geom_line(data = df4, aes(x=Variables, y=Values), size= 0.5, linetype = "dashed")+
+  labs( x="Time", y = "Insulin(Delta pmol/L)")+
+  theme_classic() + 
+  theme(text = element_text(size = 10),axis.text = element_text(size = 8)) + 
+  ylim(-620,200)+ 
+  scale_x_discrete(limits = factor(c(0, 30, 60, 90, 120, 150, 180)))+ 
+  scale_color_manual(values=c(gg_color_hue(4), "blue" ))
+# Finished line plot
+tiff( filename = "curva ins delta LI.tiff", width = 9 , height = 6, res = 600, units = "cm")
+
+p_Ipost     
+dev.off()  
+```
+
+
+##### correlazioni changes con IR-baseline
+
+
+```{r}
+library(Hmisc)
+library(corrplot)
+
+df<-data.frame( ΔG0 = Delta2$POST_BG_0MIN, 
+                ΔHOMA = Delta2$PostHOMA,
+                ΔG60 = Delta2$POST_BG_60MIN, 
+                ΔAUCG=Delta2$`Post_AUC glu 120`,
+                ΔAUCIns = Delta2$`Post_AUC ins 120`,   
+                ΔISI = Delta2$`PostMatsuda 120`, 
+               "ΔiAUC I/G_0" = Delta2$`Post_dAUC ins/glu 0-120`,
+                ΔDI = Delta2$`post_new DI 0-120`,
+               "ΔHep IR" = Delta2$`Post_Hep-IR`,
+                ISI_0 = dex_PRE2$`Pre Matsuda 120`, 
+                AUCIns_0=dex_PRE2$`Pre_AUC ins 120`, 
+                "iAUC I/G_0" = dex_PRE2$`Pre_dAUC ins/glu 0-120`, 
+                "DI_0" = dex_PRE2$`pre_new DI 0-120`)
+
+rcor<- rcorr(as.matrix(df), type = "spearman")
+tiff(filename = "corr fig4.tif", width = 20, height = 7, units = "cm", res = 300)
+corrplot(rcor$r[10:13 , 1:9], is.corr = F, col =  rev(COL2("RdBu", 200)), tl.col = "black", p.mat = rcor$P[10:13 , 1:9] , sig.level = 0.05,  insig = "pch" , tl.cex = .8, tl.srt = 30 ,  col.lim = c(-0.7, 0.7) #,cl.pos = "b"
+         )
+dev.off()
+```
+
+
+
+### METABOLOMICS
+
+```{r}
+cer<-per_heatmap[selection_mets,]
+for (r in 1:length(rownames(cer))){
+  rownames(cer)[r]<-substring(rownames(cer)[r], 1 , nchar(rownames(cer)[r])-5) 
+}
+
+pval <- pval_matrixN[selection_mets,]
+colFC <- c(rev(hsv(0.65, seq(0,1,length.out = 20) , 1)), hsv(1, seq(0,1,length.out = 20) , 1))
+colors = seq(-0.4, 0.4,length=length(colFC)+1)
+
+tiff("heatmap_delta_metsLI2.tiff",  width = 20 , height = 20 , res = 600, units = "cm")
+
+heatmap.2(cer, Colv = NA, Rowv = NA, dendrogram = "none",  scale = "none",  
+          trace = "none", cexRow = 1, cexCol = 1.5, key = T, 
+          cellnote = pval, key.title = "", keysize = 0.7,
+          notecex = 2.5,
+          notecol = "black", lhei = lhei, lwid = lwid,  margins = c(5,20), 
+   #       breaks = colors,
+          col= colFC, symbreaks = T, symkey = T 
+       )
+dev.off()
+
+3+5
+```
+
+
+```{r}
+codeMETS <- code[soggetti_metabolomics]
+Delta4 <- Delta_0[soggetti_metabolomics, ]
+Delta4 <- Delta4[codeMETS == "LI",  ]
+
+dimnames(dex_PRE2)[[2]]
+df<-data.frame( "ΔX-12063" = Delta4$`X-12063 POST`, 
+  "Δ2-aminoadipic acid" = Delta4$`2-aminoadipic acid POST`, 
+                "Δ3-hydroxybutyric acid" = Delta4$`3 hydroxybutyric acid POST`,
+            "Δ3-Methyl-2-oxobutyric acid" = Delta4$`3-Methyl-2-oxobutyric acid POST`,
+          "Δ3-methyl-2-oxo-butyric acid DNPH" = Delta4$`3-methyl-2-oxo-butyric_acid_DNPH POST`,
+          "Δ3-methyl-2-oxopentanoic acid" = Delta4$`3-methyl-2-oxopentanoic acid POST`,
+          "Δ4-methyl-2-oxopentanoic acid" = Delta4$`4-methyl-2-oxopentanoic acid POST`,
+                    "ΔAlpha-ketoglutarate" = Delta4$`Alpha-ketoglutarate POST`,
+          ΔLGPC = Delta4$`LGPC POST`,
+          ΔGlycine = Delta4$`Glycine POST`, 
+          ΔIsoleucine = Delta4$`Isoleucine POST`,
+          ΔPantothenate = Delta4$`Pantothenate POST`, 
+                ΔSerine = Delta4$`Serine POST`, 
+                ΔTyrosine = Delta4$`Tyrosine POST`,
+                ΔQIGT = Delta4$`QIGT 120 pt scale POST`,
+                ΔISI = Delta4$`PostMatsuda 120`,
+                ΔAUCIns = Delta4$`Post_AUC ins 120`,
+                ΔDI = Delta4$`post_new DI 0-120` , 
+                "ΔiAUC I/G" = Delta4$`Post_dAUC ins/glu 0-120` , 
+                ΔAUCG=Delta4$`Post_AUC glu 120`,                
+                Δweight= Delta4$PostVO2_Weight  ,
+                ΔVO2max= Delta4$PostVO2Maxmlkgmin 
+      )
+n <- 15
+
+df <- df[is.na(df$ΔQIGT)==F & is.na(df$Δweight)==F & is.na(df$ΔDI)==F, ]
+library(Hmisc)
+library(corrplot)
+rcor<- rcorr(as.matrix(df), type = "spearman")
+
+tiff("heatmap_correl_metsLI2.tiff",  width = 20 , height = 20 , res = 600, units = "cm")
+corrplot(t(rcor$r[(n+1):dim(df)[2] , 1:n]), is.corr = F, col =  colFC, tl.col = "black", p.mat = t(rcor$P[(n+1):dim(df)[2] , 1:n]) , sig.level = 0.05,  insig = "label_sig" , tl.cex = 1,  col.lim = c(-0.5, 0.5) ,cl.pos = "b", tl.srt = 30, cl.cex = 0.8
+         )
+dev.off()
+
+skimr::skim(df)
+library(ppcor)
+pc_tot <- list(r = matrix(3, n, 5), P = matrix(3 ,n ,5))
+for (i in 1:n){
+  for (j in 1:5 ){
+  xx_ij <- df[, c(i, (n+j), (dim(df)[[2]]-1))]
+  pcij <- pcor(xx_ij, method = "spearman")
+  
+  pc_tot$r[i,j] <- pcij$estimate[1, 2]
+
+  pc_tot$P[i,j] <- pcij$p.value[1, 2]}
+}
+dimnames(pc_tot$r)[[1]] <- colnames(df)[1:n]
+dimnames(pc_tot$r)[[2]] <- colnames(df)[(n+1):(n+5)]
+dimnames(pc_tot$P)[[1]] <- colnames(df)[1:n]
+dimnames(pc_tot$P)[[2]] <- colnames(df)[(n+1):(n+5)]
+
+tiff("heatmap_partialcorr_metsLI2.tiff",  width = 20 , height = 20 , res = 600, units = "cm")
+corrplot(pc_tot$r, is.corr = F,col = colFC, tl.cex = 1 , sig.level = 0.05, insig = "label_sig", p.mat = pc_tot$P, tl.col = "black" ,  col.lim = c(-0.5, 0.5),cl.pos = "b", tl.srt = 30, cl.cex = 0.65
+)
+dev.off()
+```
+
+
+
+# Logistic
+```{r}
+xlogistic <- interaction(soggetti_per_clusters, is.na(DEXLIFE$Post_AUC_Glucose)==F)
+levels(xlogistic) <- c(F, F, F, T)
+table(xlogistic)
+```
+
+```{r}
+ dex_PRE3<-dex_PRE_0[xlogistic==T, ]
+ dex_POST3<-dex_POST_0[xlogistic==T, ]
+ Change3<- Change_0[xlogistic==T, ]
+ Delta3 <- dex_POST3 - dex_PRE3
+ 
+ codelogistic <- code[xlogistic==T]
+ 
+ dex_PRE3_2<-dex_PRE3[codelogistic == "LI", ]
+ dex_POST3_2<-dex_POST3[codelogistic == "LI", ]
+ Change3_2<- Change3[ codelogistic == "LI", ]
+ Delta3_2 <- dex_POST3_2 - dex_PRE3_2
+```
+
+```{r}
+library(caret)
+library(mlbench)
+x <- log(  dex_PRE3_2[, c( 71,  73,  75 )])
+```
+
+
+```{r}
+x$code <-  factor(Delta3_2$`Post_AUC glu 120`<quantile(Delta3_2$`Post_AUC glu 120`, probs = 0.33, na.rm = T)) 
+levels(x$code) <- c("NonPositive" , "Positive")# false, true
+```
+
+#### Suppl fig
+```{r}
+label_cluster_logit <- label_cluster[is.na(dex_POST_0$Post_AUC_Glucose[soggetti_per_clusters])==F]
+levels(label_cluster_logit) <- c("LI-CL1", "LI-CL2", "LI-CL3", "LI-CL4")
+myTable <- table(label_cluster_logit[codelogistic=="LI"], x$code)
+myTable[1, ] <- myTable[1, ]/sum(myTable[1, ])
+myTable[2, ] <- myTable[2, ]/sum(myTable[2, ])
+myTable[3, ] <- myTable[3, ]/sum(myTable[3, ])
+myTable[4, ] <- myTable[4, ]/sum(myTable[4, ])
+
+myFrame <- as.data.frame(myTable)
+dimnames(myFrame)[[2]]<- c("Response", "Cluster", "Freq")
+
+
+library(RColorBrewer)
+tiff( filename = "CLvsresponders.tif", width = 12, height = 8, units = "cm" , res = 600)
+p<-ggplot(myFrame,  aes(x=Response, y = Freq, fill=Cluster)) + 
+  geom_bar(stat = "identity") +    scale_fill_brewer(palette = "Greens") + 
+  theme( axis.text.x = element_text(angle=30, hjust=1)) + theme_classic()
+p
+dev.off()
+```
+
+#### training
+```{r}
+library(dplyr)
+
+x <- x[is.na(x$code)==F, ]
+
+######## divido test e train ##### 
+set.seed(1)
+# Step 1: Get row numbers for the training dat
+trainRowNumbers <- createDataPartition(x$code, p=0.75, list=FALSE)
+trainData <- x[trainRowNumbers,]
+testData <- x[-trainRowNumbers,]
+
+
+set.seed(1)
+train_control <- trainControl(method = "repeatedcv",
+                              number = 5,
+                              repeats = 50,
+                              search = "random",
+                              verboseIter = FALSE, 
+                              classProbs = TRUE,
+                              summaryFunction=twoClassSummary, 
+                              savePredictions = TRUE, sampling = "up"
+                              )
+
+```
+
+```{r}
+# Set training control
+set.seed(1)
+elastic_net_model <- train(code ~ .,  
+            data = trainData,
+            method = "glm",
+            preProcess = c("center", "scale"),
+            family = "binomial", 
+            trControl = train_control)
+elastic_net_model
+```
+
+
+```{r}
+coef(elastic_net_model$finalModel)
+boxplot(elastic_net_model$resample$ROC)
+```
+
+#### testing
+```{r}
+prediction<-predict(elastic_net_model, testData[ , -dim(testData)[2]] )
+confusionMatrix(testData$code, prediction, # mode='everything',
+                positive='Positive')
+```
+
+#### performance
+```{r}
+library(pROC)
+library(RColorBrewer)
+display.brewer.all()
+color<-brewer.pal(10,"Accent")
+
+prediction<-predict(elastic_net_model, testData[ , -dim(testData)[2]], type = "prob" )
+auc(roc(testData$code, prediction$NonPositive))
+ci.auc(testData$code, prediction$NonPositive)
+```
+
+
+```{r}
+rect<-data.frame(xmi= c(-Inf,-Inf ),xma = c(Inf,Inf), ymi= c(-Inf,0.5) , yma=c(0.5,Inf) , Prediction=c( "1NonPositive", "0Positive"))
+xxx <- testData$code
+#levels(xxx) <- c("Non Responder","Responder" )
+xxx <- factor(xxx, levels = c( "Positive", "NonPositive"))
+tiff(filename = "accuracy plot.tiff", width = 13, height = 8, units = "cm", res =600)
+df<- data.frame(Subjects = c(1:dim(testData)[1]), Probs = prediction$Positive[order(xxx)], Class = xxx[order(xxx)])
+p<-ggplot() +  
+  geom_point(data = df, aes( x = Subjects, y = Probs, col = Class), size=5 )+ geom_hline(yintercept = 0.5) + 
+  geom_rect(data=rect, mapping=aes(xmin = xmi, xmax = xma, ymin = ymi, ymax = yma, fill=Prediction), alpha = 0.15, size = 5) 
+p+ theme_classic() 
+ dev.off()
+```
+
+
+```{r}
+prediction_training<-predict(elastic_net_model, trainData[ , -dim(trainData)[2]], type = "prob" )
+auc(roc(trainData$code, prediction_training$NonPositive))
+```
+
+```{r}
+library(pROC)
+training.roc<-roc(trainData$code, prediction_training$NonPositive)
+auc(training.roc)
+Training_roc<-data.frame(Specificity= 1- training.roc$specificities, Sensitivity=training.roc$sensitivities)
+
+test.roc <- roc(testData$code, prediction$NonPositive)
+auc(test.roc)
+Test_roc<-data.frame(Specificity= 1- test.roc$specificities, Sensitivity=test.roc$sensitivities)
+
+library(RColorBrewer)
+display.brewer.all()
+color<-brewer.pal(10,"Accent")
+
+tiff(filename = "roc_logit2.tif", width = 8, height = 6, units = "cm", res = 600)
+p<-ggplot()+
+  geom_path(data= Training_roc, aes(x= Specificity, y=Sensitivity), col= color[5], size=1.5)+ 
+  geom_path(data= Test_roc, aes(x= Specificity, y=Sensitivity), col= color[6] , size=1.5)+
+  geom_abline(slope = 1, intercept = 0) 
+
+p+ theme_classic()+ theme(text = element_text(size=12) )+
+ theme(strip.background = element_rect(colour="black", fill="white", 
+                                       linetype = "blank"))
+dev.off()
+```
+
